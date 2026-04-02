@@ -1,0 +1,53 @@
+<!DOCTYPE html><html lang="ar" dir="rtl">
+<head>
+  <meta charset="UTF-8">
+  <title>نظام سوق الجملة</title>
+  <link rel="stylesheet" href="style.css">
+</head><body><!-- 🔝 HEADER --><header class="header">
+  🥬 نظام إدارة سوق الجملة
+</header><!-- 📑 NAV --><nav class="nav">
+  <button onclick="showPage('home')">🏠 الرئيسية</button>
+  <button onclick="showPage('jobs')">📦 الأشغال</button>
+  <button onclick="showPage('customers')">👥 العملاء</button>
+  <button onclick="showPage('suppliers')">🤝 الموردين</button>
+  <button onclick="showPage('cashflow')">💸 التحصيل</button>
+</nav><!-- 📄 CONTENT --><main class="container">  <!-- 🏠 الصفحة الرئيسية -->  <section id="home" class="page active">
+    <h2>مرحباً بك 👋</h2>
+    <p>ابدأ بإضافة شغل جديد من صفحة "الأشغال"</p>
+  </section>  <!-- 📦 الأشغال -->  <section id="jobs" class="page">
+    <div class="section-header">
+      <h2>📦 الأشغال</h2>
+      <button onclick="openJobModal()">➕ إضافة شغل</button>
+    </div><div id="jobsList"></div>
+
+  </section>  <!-- 👥 العملاء -->  <section id="customers" class="page">
+    <h2>👥 حسابات العملاء</h2>
+    <div id="customersList"></div>
+  </section>  <!-- 🤝 الموردين -->  <section id="suppliers" class="page">
+    <h2>🤝 حسابات الموردين</h2>
+    <div id="suppliersList"></div>
+  </section>  <!-- 💸 التحصيل -->  <section id="cashflow" class="page">
+    <h2>💸 التحصيل</h2>
+    <div id="cashflowSection"></div>
+  </section></main><!-- 🪟 MODAL إضافة شغل --><div id="jobModal" class="modal hidden">
+  <div class="modal-content">
+    <h3>➕ إضافة شغل</h3><input id="jobName" placeholder="اسم الشغل">
+<select id="jobType">
+  <option value="تشكيلة">تشكيلة</option>
+  <option value="صنف واحد">صنف واحد</option>
+  <option value="صَبّة">صَبّة</option>
+</select>
+
+<select id="jobOwnership">
+  <option value="لحسابنا">لحسابنا</option>
+  <option value="لحساب المورد">لحساب المورد</option>
+</select>
+
+<input id="jobSupplier" placeholder="اسم المورد">
+
+<button onclick="addJob()">حفظ</button>
+<button onclick="closeJobModal()">إلغاء</button>
+
+  </div>
+</div><script src="data.js"></script><script src="utils.js"></script><script src="app.js"></script></body>
+</html>
