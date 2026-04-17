@@ -94,4 +94,3 @@ function goToProductById(productId) {
       if (row) row.scrollIntoView({ behavior: 'smooth', block: 'center' });
     }, 150);
   }
-}
