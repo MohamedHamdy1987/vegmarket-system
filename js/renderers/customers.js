@@ -12,20 +12,14 @@ async function addCustomer() {
   const phone = document.getElementById('nc-phone').value.trim();
   const bal = parseFloat(document.getElementById('nc-balance').value) || 0;
   if (!name) return alert('أدخل اسم العميل');
-
   const ledger = bal > 0 ? [{ date: S.date, type: 'order', amount: bal, ref: 'رصيد منقول من الدفاتر', isTarhil: false }] : [];
-  const newCust = { name, phone, ledger, created_at: new Date().toISOString() };
-
   try {
-    await insertCustomer(newCust);
+    await insertCustomer({ name, phone, ledger, created_at: new Date().toISOString() });
     document.getElementById('nc-name').value = '';
     document.getElementById('nc-phone').value = '';
     document.getElementById('nc-balance').value = '';
-    await loadAllData(); // إعادة تحميل البيانات
-    renderAll();
-  } catch (e) {
-    alert('فشل الإضافة: ' + e.message);
-  }
+    await loadAllData();
+  } catch (e) { alert('فشل الإضافة: ' + e.message); }
 }
 
 async function updateCustomer(id) {
@@ -36,26 +30,20 @@ async function updateCustomer(id) {
   try {
     await updateCustomerRow(id, { name: newName });
     await loadAllData();
-    renderAll();
-  } catch (e) {
-    alert('فشل التحديث: ' + e.message);
-  }
+  } catch (e) { alert('فشل التحديث: ' + e.message); }
 }
 
 async function deleteCustomer(id) {
   if (!confirm('حذف هذا العميل وكل حركاته؟')) return;
   try {
     await deleteCustomerRow(id);
-    // حذف التحصيلات المرتبطة بهذا العميل
+    // حذف التحصيلات المرتبطة
     const relatedCollections = S.collections.filter(c => c.custId == id);
     for (const col of relatedCollections) {
       await deleteCollectionRow(col.id);
     }
     await loadAllData();
-    renderAll();
-  } catch (e) {
-    alert('فشل الحذف: ' + e.message);
-  }
+  } catch (e) { alert('فشل الحذف: ' + e.message); }
 }
 
 function renderCustList() {
@@ -104,7 +92,6 @@ function filterCustomersList() {
   });
 }
 
-// دوال تفاصيل العميل (نفس المنطق السابق لكن تعمل على S المحدث)
 function openCustDetail(id) {
   const c = S.customers.find(x => x.id == id);
   if (!c) return;
