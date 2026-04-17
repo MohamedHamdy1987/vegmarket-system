@@ -74,15 +74,23 @@ function showApp() {
 async function init() {
   try {
     // تحميل البيانات المحلية فوراً لتجنب الشاشة الفارغة
-    const localData = localStorage.getItem('veg_local');
-    if (localData) {
-      try {
-        S = JSON.parse(localData);
-        _normalizeState();
-      } catch (e) {}
-    } else {
-      S.date = fmtDate(new Date());
-    }
+    import { loadAllData } from './data.js';
+
+async function init() {
+  try {
+    // 🔥 تحميل البيانات من Supabase فقط
+    await loadAllData();
+
+    // تحديث التاريخ
+    S.date = fmtDate(new Date());
+
+    // عرض البيانات
+    renderAll();
+
+  } catch (e) {
+    console.error('خطأ في تحميل البيانات:', e);
+  }
+}
 
     // محاولة استئناف الجلسة من Supabase مع timeout 3 ثوانٍ
     let session = null;
