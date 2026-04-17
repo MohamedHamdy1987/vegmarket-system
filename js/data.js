@@ -20,7 +20,7 @@ let S = {
 let xProd = null;
 
 // دوال مساعدة للـ Supabase
-async function loadAllData() {
+ async function loadAllData() {
   if (!currentUser) return;
   setSyncStatus('saving', 'جاري التحميل...');
   try {
@@ -44,6 +44,16 @@ async function loadAllData() {
     S.employees = employees.data || [];
     S.partners = partners.data || [];
     S.shops = shops.data || [];
+    
+    S.tarhilLog = await loadTarhilLog();
+    
+    setSyncStatus('', 'تم التحميل من السحابة ✓');
+    renderAll();
+  } catch (e) {
+    setSyncStatus('error', 'فشل التحميل');
+    console.error(e);
+  }
+}
 // ===================== دوال CRUD للعملاء =====================
 async function insertCustomer(customer) {
   const { data, error } = await sb.from('customers')
