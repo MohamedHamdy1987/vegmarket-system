@@ -1,7 +1,7 @@
-// ===================== renderers/admin.js — لوحة تحكم المشرف =====================
+// ===================== renderers/admin.js — لوحة تحكم المشرف (نسخة سحابية) =====================
 
 function updateAdminTabVisibility() {
-  const isAdmin  = currentUser?.user_metadata?.role === 'admin';
+  const isAdmin = currentUser?.user_metadata?.role === 'admin';
   const adminTab = document.getElementById('adminTabBtn');
   if (adminTab) adminTab.style.display = isAdmin ? 'inline-block' : 'none';
   if (isAdmin) loadAdminPayments();
@@ -32,7 +32,7 @@ async function loadAdminPayments() {
           <th style="padding:8px">التفاصيل</th>
           <th style="padding:8px">الحالة</th>
           <th style="padding:8px">الإجراء</th>
-        </tr>
+         </tr>
       </thead>
       <tbody>`;
 
@@ -41,11 +41,11 @@ async function loadAdminPayments() {
     let details = '';
     try { details = Object.values(JSON.parse(p.notes || '{}')).join(' | '); } catch (e) { details = p.notes || ''; }
 
-    const statusMap   = { pending: 'قيد المراجعة', confirmed: 'مؤكد', rejected: 'مرفوض' };
-    const statusText  = statusMap[p.status] || p.status;
-    const actionBtns  = p.status === 'pending'
+    const statusMap = { pending: 'قيد المراجعة', confirmed: 'مؤكد', rejected: 'مرفوض' };
+    const statusText = statusMap[p.status] || p.status;
+    const actionBtns = p.status === 'pending'
       ? `<button class="btn btn-success btn-sm" onclick="confirmPayment('${p.id}',${p.amount},'${p.user_id}')">تأكيد</button>
-         <button class="btn btn-danger btn-sm"  onclick="rejectPayment('${p.id}')">رفض</button>`
+         <button class="btn btn-danger btn-sm" onclick="rejectPayment('${p.id}')">رفض</button>`
       : `<button class="btn btn-warning btn-sm" onclick="resetPayment('${p.id}')">إعادة للمراجعة</button>`;
 
     html += `<tr>
@@ -64,9 +64,19 @@ async function loadAdminPayments() {
 }
 
 async function confirmPayment(paymentId, amount, userId) {
-  await sb.from('payments').update({ status: 'confirmed', confirmed_at: new Date().toISOString() }).eq('id', paymentId);
-  alert('✅ تم تأكيد الدفع');
-  loadAdminPayments();
+  try {
+    // تحديث حالة الدفع
+    await sb.from('payments').update({ status: 'confirmed', confirmed_at: new Date().toISOString() }).eq('id', paymentId);
+    
+    // تحديث اشتراك المستخدم في user_metadata (يتطلب حقوق admin)
+    const { error: updateError } = await sb.auth.admin.updateUserById(userId, {
+      user_metadata: { subscription: 'active', subscription_ends: new Date(Date.now() + 30*24*60*60*1000).toISOString() }
+    });
+    if (updateError) console.warn('لم يتم تحديث الميتاداتا تلقائياً', updateError);
+    
+    alert('✅ تم تأكيد الدفع');
+    loadAdminPayments();
+  } catch (e) { alert('فشل تأكيد الدفع: ' + e.message); }
 }
 
 async function rejectPayment(paymentId) {
