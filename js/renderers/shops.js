@@ -1,68 +1,88 @@
-// ===================== renderers/shops.js — المحلات =====================
+// ===================== renderers/shops.js =====================
 
-function addShop() {
-  const name  = document.getElementById('sh-name').value.trim();
+async function addShop() {
+  const name = document.getElementById('sh-name').value.trim();
   const phone = document.getElementById('sh-phone').value.trim();
   if (!name) return alert('أدخل اسم المحل');
-  S.shops.push({ id: Date.now(), name, phone, lahu: [], alihi: [] });
-  ['sh-name', 'sh-phone'].forEach(id => document.getElementById(id).value = '');
-  save(); renderShops();
+  try {
+    await insertShop({ name, phone, lahu: [], alihi: [], created_at: new Date().toISOString() });
+    document.getElementById('sh-name').value = '';
+    document.getElementById('sh-phone').value = '';
+    await loadAllData();
+  } catch (e) { alert('فشل الإضافة: ' + e.message); }
 }
 
-function delShop(id) {
+async function updateShop(id) {
+  const sh = S.shops.find(s => s.id == id);
+  if (!sh) return;
+  const newName = prompt('اسم المحل الجديد', sh.name);
+  if (!newName || newName === sh.name) return;
+  try {
+    await updateShopRow(id, { name: newName });
+    await loadAllData();
+  } catch (e) { alert('فشل التحديث'); }
+}
+
+async function deleteShop(id) {
   if (!confirm('حذف هذا المحل وكل حركاته؟')) return;
-  S.shops = S.shops.filter(s => s.id != id);
-  save(); renderShops();
+  try {
+    await deleteShopRow(id);
+    await loadAllData();
+  } catch (e) { alert('فشل الحذف'); }
 }
 
 function renderShops() {
-  const c = document.getElementById('shop-list-cont');
-  if (!S.shops.length) { c.innerHTML = '<p style="text-align:center;color:#aaa;padding:24px">لا توجد محلات</p>'; return; }
-  c.innerHTML = S.shops.map(sh => {
-    const lahu  = (sh.lahu  || []).reduce((s, x) => s + x.total, 0);
+  const container = document.getElementById('shop-list-cont');
+  if (!S.shops.length) {
+    container.innerHTML = '<p style="text-align:center;color:#aaa;padding:24px">لا توجد محلات</p>';
+    return;
+  }
+  container.innerHTML = S.shops.map(sh => {
+    const lahu = (sh.lahu || []).reduce((s, x) => s + x.total, 0);
     const alihi = (sh.alihi || []).reduce((s, x) => s + x.total, 0);
-    const net   = lahu - alihi;
-    return `<div class="card" style="cursor:pointer" onclick="openShopDetail(${sh.id})">
-      <div style="padding:10px 12px;background:#f3e5f5;display:flex;align-items:center;gap:8px">
-        <span>🏬</span>
-        <div>
-          <div style="font-weight:800;color:#8e24aa">${sh.name}</div>
-          <div style="font-size:0.74rem;color:var(--gray)">${sh.phone || 'لا يوجد هاتف'}</div>
-        </div>
-        <div style="margin-right:auto;display:flex;align-items:center;gap:8px">
-          <div style="text-align:left">
-            <div style="font-size:0.74rem;color:var(--gray)">الرصيد</div>
-            <div style="font-weight:900;color:${net >= 0 ? 'var(--green)' : 'var(--red)'}">${N(net)} جنيه</div>
+    const net = lahu - alihi;
+    return `
+      <div class="card" style="cursor:pointer" onclick="openShopDetail(${sh.id})">
+        <div style="padding:10px 12px;background:#f3e5f5;display:flex;align-items:center;gap:8px">
+          <span>🏬</span>
+          <div>
+            <div style="font-weight:800;color:#8e24aa">${sh.name}</div>
+            <div style="font-size:0.74rem;color:var(--gray)">${sh.phone || 'لا يوجد هاتف'}</div>
           </div>
-          <button class="btn btn-r btn-xs no-print" onclick="event.stopPropagation();delShop(${sh.id})">🗑️</button>
+          <div style="margin-right:auto;display:flex;align-items:center;gap:8px">
+            <div style="text-align:left">
+              <div style="font-size:0.74rem;color:var(--gray)">الرصيد</div>
+              <div style="font-weight:900;color:${net >= 0 ? 'var(--green)' : 'var(--red)'}">${N(net)} جنيه</div>
+            </div>
+            <button class="btn btn-b btn-xs no-print" onclick="event.stopPropagation();updateShop(${sh.id})">✏️</button>
+            <button class="btn btn-r btn-xs no-print" onclick="event.stopPropagation();deleteShop(${sh.id})">🗑️</button>
+          </div>
         </div>
-      </div>
-    </div>`;
+      </div>`;
   }).join('');
 }
 
 function openShopDetail(id) {
   const sh = S.shops.find(x => x.id == id);
   if (!sh) return;
-  sh.lahu  = sh.lahu  || [];
+  sh.lahu = sh.lahu || [];
   sh.alihi = sh.alihi || [];
-  document.getElementById('shop-list-view').style.display   = 'none';
+  document.getElementById('shop-list-view').style.display = 'none';
   document.getElementById('shop-detail-view').style.display = 'block';
   document.getElementById('shd-name').textContent = sh.name;
 
-  const lahuTot  = sh.lahu.reduce((s, x)  => s + x.total, 0);
+  const lahuTot = sh.lahu.reduce((s, x) => s + x.total, 0);
   const alihiTot = sh.alihi.reduce((s, x) => s + x.total, 0);
-  const net      = lahuTot - alihiTot;
+  const net = lahuTot - alihiTot;
   document.getElementById('shd-bal').textContent = `رصيد: ${N(net)} جنيه`;
 
-  const custOpts =
-    '<option value="">نقدي</option>' +
-    S.customers.map(c  => `<option value="c_${c.id}">${c.name}</option>`).join('') +
-    S.employees.map(e  => `<option value="e_${e.id}">👷 ${e.name}</option>`).join('') +
-    S.partners.map(p   => `<option value="p_${p.id}">🤝 ${p.name}</option>`).join('');
+  const custOpts = '<option value="">نقدي</option>' +
+    S.customers.map(c => `<option value="c_${c.id}">${c.name}</option>`).join('') +
+    S.employees.map(e => `<option value="e_${e.id}">👷 ${e.name}</option>`).join('') +
+    S.partners.map(p => `<option value="p_${p.id}">🤝 ${p.name}</option>`).join('');
 
-  const lahuRows = sh.lahu.map((x, xi) =>
-    `<tr>
+  const lahuRows = sh.lahu.map((x, xi) => `
+    <tr>
       <td style="padding:5px;font-size:0.75rem">${x.date}</td>
       <td style="padding:5px;font-weight:700">${x.productName}</td>
       <td style="padding:5px">${x.qty || '-'}</td>
@@ -72,8 +92,8 @@ function openShopDetail(id) {
       <td style="padding:5px"><button class="btn btn-r btn-xs" onclick="delShopLahu(${id},${xi})">🗑️</button></td>
     </tr>`).join('') || '<tr><td colspan="7" style="color:#aaa;text-align:center;padding:10px">لا توجد حركات</td></tr>';
 
-  const alihiRows = sh.alihi.map(x =>
-    `<tr>
+  const alihiRows = sh.alihi.map(x => `
+    <tr>
       <td style="padding:5px;font-size:0.75rem">${x.date}</td>
       <td style="padding:5px;font-weight:700">${x.productName}</td>
       <td style="padding:5px">${x.qty || '-'}</td>
@@ -88,7 +108,6 @@ function openShopDetail(id) {
       <button style="flex:1;padding:13px;font-family:Cairo,sans-serif;font-size:0.93rem;font-weight:800;border:none;cursor:pointer;background:#fdf2f2;color:var(--red)"
         onclick="showShopTab('alihi',this,${id})">عليه 📤</button>
     </div>
-
     <div id="sh-lahu-${id}">
       <div class="card">
         <div class="ch g"><span>➕</span><h2>إضافة مأخوذ منه (له)</h2></div>
@@ -114,9 +133,7 @@ function openShopDetail(id) {
         <div class="ch g"><span>📋</span><h2>سجل له</h2></div>
         <div style="overflow-x:auto">
           <table style="width:100%;border-collapse:collapse;font-size:0.8rem">
-            <thead><tr style="background:#f0f7f0">
-              <th>التاريخ</th><th>الصنف</th><th>عدد</th><th>وزن</th><th>المبلغ</th><th>مرحَّل</th><th></th>
-            </tr></thead>
+            <thead><tr style="background:#f0f7f0"><th>التاريخ</th><th>الصنف</th><th>عدد</th><th>وزن</th><th>المبلغ</th><th>مرحَّل</th><th></th></tr></thead>
             <tbody>${lahuRows}</tbody>
           </table>
         </div>
@@ -127,19 +144,16 @@ function openShopDetail(id) {
         </div>
       </div>
     </div>
-
     <div id="sh-alihi-${id}" style="display:none">
       <div class="card">
         <div class="ch r"><h2 style="color:var(--red)">ما باعه لعملائنا (عليه)</h2></div>
-        <div class="cb"><p style="color:var(--gray);font-size:0.83rem">يُستورد تلقائياً من صفحة المشتريات عند اختيار هذا المحل.</p></div>
+        <div class="cb"><p style="color:var(--gray);font-size:0.83rem">يُستورد تلقائياً من صفحة المبيعات عند اختيار هذا المحل.</p></div>
       </div>
       <div class="card">
         <div class="ch r"><h2 style="color:var(--red)">سجل عليه</h2></div>
         <div style="overflow-x:auto">
           <table style="width:100%;border-collapse:collapse;font-size:0.8rem">
-            <thead><tr style="background:#fdf2f2">
-              <th>التاريخ</th><th>الصنف</th><th>عدد</th><th>وزن(ك)</th><th>المبلغ</th>
-            </tr></thead>
+            <thead><tr style="background:#fdf2f2"><th>التاريخ</th><th>الصنف</th><th>عدد</th><th>وزن(ك)</th><th>المبلغ</th></tr></thead>
             <tbody>${alihiRows}</tbody>
           </table>
         </div>
@@ -157,26 +171,26 @@ function openShopDetail(id) {
 }
 
 function showShopTab(tab, btn, id) {
-  document.getElementById(`sh-lahu-${id}`).style.display  = tab === 'lahu'  ? 'block' : 'none';
+  document.getElementById(`sh-lahu-${id}`).style.display = tab === 'lahu' ? 'block' : 'none';
   document.getElementById(`sh-alihi-${id}`).style.display = tab === 'alihi' ? 'block' : 'none';
 }
 
 function calcShop(id) {
-  const qty   = parseFloat(document.getElementById(`sh-qty-${id}`).value)   || 0;
-  const wt    = parseFloat(document.getElementById(`sh-wt-${id}`).value)    || 0;
+  const qty = parseFloat(document.getElementById(`sh-qty-${id}`).value) || 0;
+  const wt = parseFloat(document.getElementById(`sh-wt-${id}`).value) || 0;
   const price = parseFloat(document.getElementById(`sh-price-${id}`).value) || 0;
   document.getElementById(`sh-tot-${id}`).value = (wt > 0 ? wt : qty) * price || '';
 }
 
-function addShopLahu(id) {
-  const sh    = S.shops.find(x => x.id == id);
+async function addShopLahu(id) {
+  const sh = S.shops.find(x => x.id == id);
   if (!sh) return;
   const pname = document.getElementById(`sh-pname-${id}`).value.trim();
-  const qty   = parseFloat(document.getElementById(`sh-qty-${id}`).value)   || 0;
-  const unit  = document.getElementById(`sh-unit-${id}`).value;
-  const wt    = parseFloat(document.getElementById(`sh-wt-${id}`).value)    || 0;
+  const qty = parseFloat(document.getElementById(`sh-qty-${id}`).value) || 0;
+  const unit = document.getElementById(`sh-unit-${id}`).value;
+  const wt = parseFloat(document.getElementById(`sh-wt-${id}`).value) || 0;
   const price = parseFloat(document.getElementById(`sh-price-${id}`).value) || 0;
-  const tv    = document.getElementById(`sh-target-${id}`).value;
+  const tv = document.getElementById(`sh-target-${id}`).value;
   if (!pname) return alert('أدخل اسم الصنف');
   const units = wt > 0 ? wt : qty;
   if (!units || !price) return alert('أدخل الكمية والسعر');
@@ -184,27 +198,30 @@ function addShopLahu(id) {
   let targetName = 'نقدي';
   if (tv.startsWith('c_')) {
     const cust = S.customers.find(c => c.id == tv.slice(2));
-    if (cust) { targetName = cust.name; cust.ledger.push({ date: S.date, type: 'order', amount: total, ref: pname, isTarhil: false }); }
+    if (cust) { targetName = cust.name; await updateCustomerRow(cust.id, { ledger: [...(cust.ledger || []), { date: S.date, type: 'order', amount: total, ref: pname, isTarhil: false }] }); }
   } else if (tv.startsWith('e_')) {
     const emp = S.employees.find(e => e.id == tv.slice(2));
-    if (emp) { targetName = '👷 ' + emp.name; emp.payments.push({ amount: total, note: `بضاعة: ${pname}`, date: S.date }); }
+    if (emp) { targetName = '👷 ' + emp.name; await updateEmployeeRow(emp.id, { payments: [...(emp.payments || []), { amount: total, note: `بضاعة: ${pname}`, date: S.date }] }); }
   } else if (tv.startsWith('p_')) {
     const part = S.partners.find(p => p.id == tv.slice(2));
-    if (part) { targetName = '🤝 ' + part.name; part.payments.push({ amount: total, note: `بضاعة: ${pname}`, date: S.date }); }
+    if (part) { targetName = '🤝 ' + part.name; await updatePartnerRow(part.id, { payments: [...(part.payments || []), { amount: total, note: `بضاعة: ${pname}`, date: S.date }] }); }
   }
-  sh.lahu.push({ date: S.date, productName: pname, qty: qty || null, unit, weight: wt || null, price, total, targetName });
-  ['sh-pname', 'sh-qty', 'sh-wt', 'sh-price', 'sh-tot'].forEach(pfx => document.getElementById(`${pfx}-${id}`).value = '');
-  save(); openShopDetail(id); renderAll();
+  const newLahu = [...(sh.lahu || []), { date: S.date, productName: pname, qty: qty || null, unit, weight: wt || null, price, total, targetName }];
+  await updateShopRow(id, { lahu: newLahu });
+  await loadAllData();
+  openShopDetail(id);
 }
 
-function delShopLahu(shId, idx) {
+async function delShopLahu(shId, idx) {
   const sh = S.shops.find(x => x.id == shId);
   if (!sh) return;
-  sh.lahu.splice(idx, 1);
-  save(); openShopDetail(shId);
+  const newLahu = (sh.lahu || []).filter((_, i) => i != idx);
+  await updateShopRow(shId, { lahu: newLahu });
+  await loadAllData();
+  openShopDetail(shId);
 }
 
 function showShopList() {
-  document.getElementById('shop-list-view').style.display   = 'block';
+  document.getElementById('shop-list-view').style.display = 'block';
   document.getElementById('shop-detail-view').style.display = 'none';
 }
