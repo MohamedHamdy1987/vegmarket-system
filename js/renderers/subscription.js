@@ -1,4 +1,4 @@
-// ===================== renderers/subscription.js — الاشتراك والدفع =====================
+// ===================== renderers/subscription.js — الاشتراك (نسخة سحابية) =====================
 
 let selectedPlan = null;
 const planAmount = { monthly: 750, yearly: 6000 };
@@ -10,7 +10,7 @@ function selectPlan(plan) {
 }
 
 function updatePaymentDetails() {
-  const method     = document.getElementById('payment-method').value;
+  const method = document.getElementById('payment-method').value;
   const detailsDiv = document.getElementById('payment-details');
   let html = '';
 
@@ -36,7 +36,6 @@ function updatePaymentDetails() {
       <div class="frow"><label>🔢 كود الدفع</label><input type="text" id="fawry_code" placeholder="الكود"></div>
       <button class="btn btn-b" onclick="payWithFawry()">💳 الدفع عبر فوري</button>`;
   }
-
   detailsDiv.innerHTML = html;
 }
 
@@ -46,43 +45,44 @@ function payWithFawry() {
 
 async function submitPayment() {
   if (!selectedPlan) return alert('اختر باقة أولاً');
-  const method        = document.getElementById('payment-method').value;
-  const amount        = planAmount[selectedPlan];
+  const method = document.getElementById('payment-method').value;
+  const amount = planAmount[selectedPlan];
   const transactionId = document.getElementById('trans_id')?.value || '';
-  let additionalData  = {};
+  let additionalData = {};
 
-  if (method === 'vodafone')   additionalData.phone      = document.getElementById('phone')?.value;
-  else if (method === 'instapay') additionalData.iban    = document.getElementById('iban')?.value;
+  if (method === 'vodafone') additionalData.phone = document.getElementById('phone')?.value;
+  else if (method === 'instapay') additionalData.iban = document.getElementById('iban')?.value;
   else if (method === 'bank') {
-    additionalData.bank_name  = document.getElementById('bank_name')?.value;
+    additionalData.bank_name = document.getElementById('bank_name')?.value;
     additionalData.account_no = document.getElementById('account_no')?.value;
   }
 
   if (!transactionId && method !== 'fawry') return alert('أدخل رقم العملية');
 
-  const { error } = await sb.from('payments').insert({
-    user_id: currentUser.id, amount, method,
-    transaction_id: transactionId,
-    notes: JSON.stringify(additionalData),
-    status: 'pending'
-  });
-
-  if (error) { alert('خطأ: ' + error.message); return; }
-  alert('✅ تم إرسال طلب الدفع بنجاح');
-  document.getElementById('payment-form').style.display = 'none';
-  renderSubscriptionStatus();
+  try {
+    const { error } = await sb.from('payments').insert({
+      user_id: currentUser.id, amount, method,
+      transaction_id: transactionId,
+      notes: JSON.stringify(additionalData),
+      status: 'pending'
+    });
+    if (error) throw error;
+    alert('✅ تم إرسال طلب الدفع بنجاح');
+    document.getElementById('payment-form').style.display = 'none';
+    renderSubscriptionStatus();
+  } catch (e) { alert('فشل الإرسال: ' + e.message); }
 }
 
 function renderSubscriptionStatus() {
   const meta = currentUser?.user_metadata;
-  const div  = document.getElementById('sub-status');
+  const div = document.getElementById('sub-status');
   if (!div) return;
 
   if (meta?.subscription === 'active') {
     const ends = new Date(meta.subscription_ends);
     div.innerHTML = `<div style="background:#e8f5e9;padding:12px;border-radius:8px;">✅ اشتراكك نشط حتى ${ends.toLocaleDateString('ar-EG')}</div>`;
   } else if (meta?.subscription === 'trial') {
-    const ends     = new Date(meta.trial_ends);
+    const ends = new Date(meta.trial_ends);
     const daysLeft = Math.ceil((ends - new Date()) / (1000 * 60 * 60 * 24));
     div.innerHTML = `<div style="background:#fff3e0;padding:12px;border-radius:8px;">⏳ تجربة مجانية: متبقي ${daysLeft} يوم.
       <a href="#" onclick="document.getElementById('payment-form').scrollIntoView();">اشترك الآن</a></div>`;
