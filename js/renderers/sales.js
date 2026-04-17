@@ -1,37 +1,14 @@
-// ===================== renderers/sales.js — المبيعات والترحيلات =====================
+// ===================== renderers/sales.js =====================
 
-// --- دوال مساعدة للترحيل (تُستخدم من sales و customers) ---
-function addToTarhil(custId, pName, qty, unit, wt, price, total) {
-  if (!custId) return;
-  if (!S.tarhilLog[S.date]) S.tarhilLog[S.date] = {};
-  if (!S.tarhilLog[S.date][custId]) S.tarhilLog[S.date][custId] = [];
-  S.tarhilLog[S.date][custId].push({ productName: pName, qty, unit, weight: wt, price, total });
-}
+// المتغيرات العامة
+let xProd = null;
 
-function removeFromTarhil(custId, date, total) {
-  if (!custId || !S.tarhilLog[date] || !S.tarhilLog[date][custId]) return;
-  const idx = S.tarhilLog[date][custId].findIndex(t => t.total === total);
-  if (idx >= 0) S.tarhilLog[date][custId].splice(idx, 1);
-  postDailyTotal(custId, date);
-}
-
-function postDailyTotal(custId, date) {
-  const cust = S.customers.find(c => c.id == custId);
-  if (!cust) return;
-  cust.ledger = cust.ledger.filter(e => !(e.type === 'order' && e.isTarhil && e.date === date));
-  const items = (S.tarhilLog[date] && S.tarhilLog[date][custId]) || [];
-  if (!items.length) return;
-  const dayTotal = items.reduce((s, t) => s + t.total, 0);
-  cust.ledger.push({ date, type: 'order', amount: dayTotal, ref: 'يومية', isTarhil: true, tarhilDate: date });
-}
-
-// --- جدول المبيعات ---
 function goToProduct(idx) {
   xProd = idx;
   document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
   document.querySelectorAll('nav.tabs button').forEach(b => b.classList.remove('active'));
   document.getElementById('page-sales').classList.add('active');
-  document.querySelectorAll('nav.tabs button')[2].classList.add('active');
+  document.querySelectorAll('nav.tabs button')[3].classList.add('active');
   renderAll();
   setTimeout(() => {
     const r = document.getElementById('pr-' + idx);
@@ -42,15 +19,16 @@ function goToProduct(idx) {
 function toggleProd(i) { xProd = xProd === i ? null : i; renderSalesTable(); }
 
 function updateDayTotal() {
-  const t = S.products.reduce((s, p) => s + p.salesLog.reduce((ss, x) => ss + x.total, 0), 0);
+  const t = S.products.reduce((s, p) => s + (p.salesLog || []).reduce((ss, x) => ss + x.total, 0), 0);
   document.getElementById('day-total').textContent = N(t) + ' جنيه';
 }
 
-function delProduct(i) {
-  if (!confirm('حذف هذا الصنف؟')) return;
-  S.products.splice(i, 1);
-  if (xProd === i) xProd = null;
-  save(); renderAll();
+async function deleteProductById(productId) {
+  if (!confirm('حذف هذا المنتج؟')) return;
+  try {
+    await deleteProductRow(productId);
+    await loadAllData();
+  } catch (e) { alert('فشل الحذف'); }
 }
 
 function renderSalesTable() {
@@ -61,11 +39,11 @@ function renderSalesTable() {
   }
   let html = '';
   S.products.forEach((p, i) => {
-    const rem  = p.totalQty - p.sold;
-    const sup  = S.suppliers.find(s => s.id == p.supplierId);
+    const rem = p.totalQty - p.sold;
+    const sup = S.suppliers.find(s => s.id == p.supplierId);
     const done = rem <= 0;
-    const tot  = p.salesLog.reduce((s, x) => s + x.total, 0);
-    const isX  = xProd === i;
+    const tot = (p.salesLog || []).reduce((s, x) => s + x.total, 0);
+    const isX = xProd === i;
     html += `<tr style="cursor:pointer;${isX ? 'background:#eafaf1;font-weight:700;' : ''}" id="pr-${i}" onclick="toggleProd(${i})">
       <td style="padding:6px 5px;text-align:center;font-size:0.76rem;color:var(--gray)">${i + 1}</td>
       <td style="padding:6px 5px;text-align:center"><strong style="color:var(--orange);font-size:0.79rem">${sup ? sup.name : '-'}</strong></td>
@@ -75,21 +53,22 @@ function renderSalesTable() {
       <td style="padding:6px 5px;text-align:center;color:${done ? 'var(--red)' : 'var(--blue)'};font-weight:800">${rem}${done ? ' ✅' : ''}</td>
       <td style="padding:6px 5px;text-align:center;font-weight:900;color:var(--green)">${N(tot)} جنيه</td>
       <td style="padding:6px 5px;text-align:center">${isX ? '▲' : '▼'}</td>
-      <td style="padding:6px 5px;" onclick="event.stopPropagation()"><button class="btn btn-r btn-xs" onclick="delProduct(${i})">🗑️</button></td>
+      <td style="padding:6px 5px;" onclick="event.stopPropagation()"><button class="btn btn-r btn-xs" onclick="deleteProductById(${p.id})">🗑️</button></td>
     </tr>`;
     if (isX) {
-      const salesRows = p.salesLog.map((sl, si) => {
-        const cust   = S.customers.find(c => c.id == sl.custId);
+      const salesRows = (p.salesLog || []).map((sl, si) => {
+        const cust = S.customers.find(c => c.id == sl.custId);
         const isCash = !sl.custId;
-        return `<tr>
-          <td style="padding:4px 5px">${sl.qty || '-'}</td>
-          <td style="padding:4px 5px;font-weight:700">${isCash ? '<span style="background:#d5f5e3;color:var(--green);border-radius:4px;padding:1px 5px;font-size:0.69rem">نقدي</span>' : (cust ? cust.name : '-')}</td>
-          <td style="padding:4px 5px">${sl.weight || '-'}</td>
-          <td style="padding:4px 5px">${sl.price} جنيه</td>
-          <td style="padding:4px 5px;font-weight:900;color:var(--green)">${N(sl.total)} جنيه</td>
-          <td style="padding:4px 5px"><button class="btn btn-y btn-xs" style="background:#d4ac0d;color:#fff;" onclick="event.stopPropagation();openEditSale(${i},${si})">✏️</button></td>
-          <td style="padding:4px 5px"><button class="btn btn-r btn-xs" onclick="event.stopPropagation();delSaleLine(${i},${si})">🗑️</button></td>
-        </tr>`;
+        return `
+          <tr>
+            <td style="padding:4px 5px">${sl.qty || '-'}</td>
+            <td style="padding:4px 5px;font-weight:700">${isCash ? '<span style="background:#d5f5e3;color:var(--green);border-radius:4px;padding:1px 5px;font-size:0.69rem">نقدي</span>' : (cust ? cust.name : '-')}</td>
+            <td style="padding:4px 5px">${sl.weight || '-'}</td>
+            <td style="padding:4px 5px">${sl.price} جنيه</td>
+            <td style="padding:4px 5px;font-weight:900;color:var(--green)">${N(sl.total)} جنيه</td>
+            <td style="padding:4px 5px"><button class="btn btn-warning btn-xs" style="background:#d4ac0d;color:#fff;" onclick="event.stopPropagation();openEditSale(${i},${si})">✏️</button></td>
+            <td style="padding:4px 5px"><button class="btn btn-r btn-xs" onclick="event.stopPropagation();delSaleLine(${i},${si})">🗑️</button></td>
+          </tr>`;
       }).join('');
       html += `<tr style="background:#f8fff8"><td colspan="9" style="padding:0">
         <div style="padding:8px 12px">
@@ -97,7 +76,7 @@ function renderSalesTable() {
             <strong style="color:var(--green);font-size:0.86rem">مبيعات ${p.name}</strong>
             <button class="btn btn-g btn-sm" onclick="event.stopPropagation();openSaleForm(${i})">+ بيعة</button>
           </div>
-          ${p.salesLog.length
+          ${(p.salesLog || []).length
             ? `<table style="width:100%;border-collapse:collapse;font-size:0.79rem">
                 <thead><tr style="background:#e8f8ee"><th>عدد</th><th>العميل</th><th>وزن(ك)</th><th>سعر</th><th>المبلغ</th><th>✏️</th><th>🗑️</th></tr></thead>
                 <tbody>${salesRows}</tbody>
@@ -106,7 +85,7 @@ function renderSalesTable() {
                   <td style="padding:5px;color:var(--green)">${N(tot)} جنيه</td>
                   <td colspan="2"></td>
                 </tr></tfoot>
-              </table>`
+               </table>`
             : '<p style="color:#aaa;text-align:center;padding:10px">لا توجد مبيعات</p>'}
           <div id="sf-${i}"></div>
         </div>
@@ -117,7 +96,6 @@ function renderSalesTable() {
   updateDayTotal();
 }
 
-// --- نموذج البيع ---
 function openSaleForm(i) {
   const d = document.getElementById('sf-' + i);
   if (!d) return;
@@ -132,8 +110,8 @@ function openEditSale(pi, si) {
 }
 
 function buildSaleForm(pi, editIdx) {
-  const p    = S.products[pi];
-  const sl   = editIdx !== null ? p.salesLog[editIdx] : null;
+  const p = S.products[pi];
+  const sl = editIdx !== null ? (p.salesLog || [])[editIdx] : null;
   const custOpts = '<option value="">نقدي</option>' +
     S.customers.map(c => `<option value="${c.id}" ${sl && sl.custId == c.id ? 'selected' : ''}>${c.name}</option>`).join('');
   return `<div style="background:#f0faf5;border-radius:8px;padding:10px;margin-top:8px;border:1.5px solid var(--border)">
@@ -153,93 +131,132 @@ function buildSaleForm(pi, editIdx) {
 }
 
 function calcSF(i) {
-  const qty   = parseFloat(document.getElementById(`sf-qty-${i}`).value)   || 0;
-  const wt    = parseFloat(document.getElementById(`sf-wt-${i}`).value)    || 0;
+  const qty = parseFloat(document.getElementById(`sf-qty-${i}`).value) || 0;
+  const wt = parseFloat(document.getElementById(`sf-wt-${i}`).value) || 0;
   const price = parseFloat(document.getElementById(`sf-price-${i}`).value) || 0;
   document.getElementById(`sf-tot-${i}`).value = (wt > 0 ? wt : qty) * price || '';
 }
 
-function confirmSale(i) {
-  const p      = S.products[i];
-  const qty    = parseFloat(document.getElementById(`sf-qty-${i}`).value)   || 0;
-  const wt     = parseFloat(document.getElementById(`sf-wt-${i}`).value)    || 0;
-  const price  = parseFloat(document.getElementById(`sf-price-${i}`).value) || 0;
+async function confirmSale(i) {
+  const p = S.products[i];
+  const qty = parseFloat(document.getElementById(`sf-qty-${i}`).value) || 0;
+  const wt = parseFloat(document.getElementById(`sf-wt-${i}`).value) || 0;
+  const price = parseFloat(document.getElementById(`sf-price-${i}`).value) || 0;
   const custId = document.getElementById(`sf-cust-${i}`).value;
-  const units  = wt > 0 ? wt : qty;
+  const units = wt > 0 ? wt : qty;
   if (!units || !price) return alert('أدخل الكمية والسعر');
   if (qty > 0 && qty > (p.totalQty - p.sold)) return alert('الكمية أكبر من المتبقي!');
-  const total  = units * price;
+  const total = units * price;
   const isCash = !custId;
-  const colId  = isCash ? (Date.now() + Math.random()) : null;
-  S.products[i].sold        += qty || 0;
-  S.products[i].totalWeight  = (p.totalWeight || 0) + (wt || 0);
-  S.products[i].salesLog.push({ date: S.date, qty: qty || null, weight: wt || null, price, total, custId, collectionId: colId });
-  if (isCash) {
-    S.collections.push({ id: colId, date: S.date, custId: null, amount: total, note: `نقدية — ${p.name} ${qty || wt} ${qty ? p.unit : 'ك'} × ${price}`, isCash: true, isDiscount: false });
-  } else {
-    addToTarhil(custId, p.name, qty || null, p.unit, wt || null, price, total);
-    postDailyTotal(custId, S.date);
-  }
-  save(); renderAll(); checkAutoInvoice(p.supplierId);
+  const colId = isCash ? (Date.now() + Math.random()) : null;
+  const newSale = { date: S.date, qty: qty || null, weight: wt || null, price, total, custId: custId || null, collectionId: colId };
+  
+  const updatedProduct = {
+    sold: p.sold + (qty || 0),
+    totalWeight: (p.totalWeight || 0) + (wt || 0),
+    salesLog: [...(p.salesLog || []), newSale]
+  };
+  
+  try {
+    await updateProductRow(p.id, updatedProduct);
+    if (isCash && colId) {
+      await insertCollection({ id: colId, date: S.date, custId: null, amount: total, note: `نقدية — ${p.name} ${qty || wt} ${qty ? p.unit : 'ك'} × ${price}`, isCash: true, isDiscount: false });
+    } else if (custId) {
+      await addToTarhil(custId, p.name, qty || null, p.unit, wt || null, price, total);
+      await postDailyTotal(custId, S.date);
+    }
+    await loadAllData();
+    checkAutoInvoice(p.supplierId);
+  } catch (e) { alert('فشل تسجيل البيع: ' + e.message); }
 }
 
-function saveEditSale(pi, si) {
-  const p   = S.products[pi];
-  const old = p.salesLog[si];
-  if (old.custId) removeFromTarhil(old.custId, old.date, old.total);
-  if (!old.custId && old.collectionId) S.collections = S.collections.filter(c => c.id !== old.collectionId);
-  S.products[pi].sold        -= (old.qty    || 0);
-  S.products[pi].totalWeight  = (p.totalWeight || 0) - (old.weight || 0);
-  const qty    = parseFloat(document.getElementById(`sf-qty-${pi}`).value)   || 0;
-  const wt     = parseFloat(document.getElementById(`sf-wt-${pi}`).value)    || 0;
-  const price  = parseFloat(document.getElementById(`sf-price-${pi}`).value) || 0;
+async function saveEditSale(pi, si) {
+  const p = S.products[pi];
+  const old = (p.salesLog || [])[si];
+  if (!old) return;
+  
+  // التراجع عن التعديلات القديمة
+  if (old.custId) await removeFromTarhil(old.custId, old.date, old.total);
+  if (!old.custId && old.collectionId) await deleteCollectionRow(old.collectionId);
+  
+  const qty = parseFloat(document.getElementById(`sf-qty-${pi}`).value) || 0;
+  const wt = parseFloat(document.getElementById(`sf-wt-${pi}`).value) || 0;
+  const price = parseFloat(document.getElementById(`sf-price-${pi}`).value) || 0;
   const custId = document.getElementById(`sf-cust-${pi}`).value;
-  const units  = wt > 0 ? wt : qty;
+  const units = wt > 0 ? wt : qty;
   if (!units || !price) return alert('أدخل الكمية والسعر');
-  const total  = units * price;
+  const total = units * price;
   const isCash = !custId;
-  const colId  = isCash ? (Date.now() + Math.random()) : null;
-  p.salesLog[si] = { date: S.date, qty: qty || null, weight: wt || null, price, total, custId, collectionId: colId };
-  S.products[pi].sold        += qty || 0;
-  S.products[pi].totalWeight  = (p.totalWeight || 0) + (wt || 0);
-  if (isCash) {
-    S.collections.push({ id: colId, date: S.date, custId: null, amount: total, note: `نقدية — ${p.name}`, isCash: true, isDiscount: false });
-  } else {
-    addToTarhil(custId, p.name, qty || null, p.unit, wt || null, price, total);
-    postDailyTotal(custId, S.date);
-  }
-  save(); renderAll();
+  const colId = isCash ? (Date.now() + Math.random()) : null;
+  
+  const newSale = { date: S.date, qty: qty || null, weight: wt || null, price, total, custId: custId || null, collectionId: colId };
+  const updatedSalesLog = [...(p.salesLog || [])];
+  updatedSalesLog[si] = newSale;
+  
+  const updatedProduct = {
+    sold: p.sold - (old.qty || 0) + (qty || 0),
+    totalWeight: (p.totalWeight || 0) - (old.weight || 0) + (wt || 0),
+    salesLog: updatedSalesLog
+  };
+  
+  try {
+    await updateProductRow(p.id, updatedProduct);
+    if (isCash && colId) {
+      await insertCollection({ id: colId, date: S.date, custId: null, amount: total, note: `نقدية — ${p.name}`, isCash: true, isDiscount: false });
+    } else if (custId) {
+      await addToTarhil(custId, p.name, qty || null, p.unit, wt || null, price, total);
+      await postDailyTotal(custId, S.date);
+    }
+    await loadAllData();
+  } catch (e) { alert('فشل تعديل البيع: ' + e.message); }
 }
 
-function delSaleLine(pi, si) {
-  const p  = S.products[pi];
-  const sl = p.salesLog[si];
-  if (sl.custId) removeFromTarhil(sl.custId, sl.date, sl.total);
-  if (!sl.custId && sl.collectionId) S.collections = S.collections.filter(c => c.id !== sl.collectionId);
-  p.sold        -= (sl.qty    || 0);
-  p.totalWeight  = (p.totalWeight || 0) - (sl.weight || 0);
-  p.salesLog.splice(si, 1);
-  save(); renderAll();
+async function delSaleLine(pi, si) {
+  const p = S.products[pi];
+  const sl = (p.salesLog || [])[si];
+  if (!sl) return;
+  if (sl.custId) await removeFromTarhil(sl.custId, sl.date, sl.total);
+  if (!sl.custId && sl.collectionId) await deleteCollectionRow(sl.collectionId);
+  
+  const updatedSalesLog = (p.salesLog || []).filter((_, i) => i != si);
+  const updatedProduct = {
+    sold: p.sold - (sl.qty || 0),
+    totalWeight: (p.totalWeight || 0) - (sl.weight || 0),
+    salesLog: updatedSalesLog
+  };
+  try {
+    await updateProductRow(p.id, updatedProduct);
+    await loadAllData();
+  } catch (e) { alert('فشل حذف البيع'); }
 }
 
-function closeDay() {
+async function closeDay() {
   const rem = S.products.filter(p => (p.totalQty - p.sold) > 0);
-  if (!rem.length)                           { alert('لا توجد بضاعة للترحيل!'); return; }
+  if (!rem.length) { alert('لا توجد بضاعة للترحيل!'); return; }
   if (!confirm(`ترحيل ${rem.length} صنف للغد؟`)) return;
-  S.products = S.products.map(p => {
-    if ((p.totalQty - p.sold) <= 0) return null;
-    return { ...p, totalQty: p.totalQty - p.sold, sold: 0, salesLog: [], carryoverFrom: S.date };
-  }).filter(Boolean);
+  
+  for (const p of rem) {
+    const newTotalQty = p.totalQty - p.sold;
+    await updateProductRow(p.id, {
+      totalQty: newTotalQty,
+      sold: 0,
+      salesLog: [],
+      carryoverFrom: S.date
+    });
+  }
   xProd = null;
   const nd = new Date(); nd.setDate(nd.getDate() + 1);
   S.date = fmtDate(nd);
-  save(); updateDates(); renderAll();
+  await loadAllData();
+  updateDates();
+  renderAll();
   alert('✅ تم إغلاق اليوم!');
 }
 
-function checkAutoInvoice(supplierId) {
+async function checkAutoInvoice(supplierId) {
   const sp = S.products.filter(p => p.supplierId == supplierId);
   if (sp.length && sp.every(p => (p.totalQty - p.sold) <= 0) &&
-      !S.invoices.some(inv => inv.supplierId == supplierId && inv.date === S.date))
-    generateInvoiceFor(supplierId, true);
+      !S.invoices.some(inv => inv.supplierId == supplierId && inv.date === S.date)) {
+    await generateInvoiceFor(supplierId, true);
+  }
 }
