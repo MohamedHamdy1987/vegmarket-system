@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>نظام محل الخضار والفواكه</title>
+<title>نظام محل الخضار والفواكه - سحابة كاملة</title>
 <link href="https://fonts.googleapis.com/css2?family=Cairo:wght@400;600;700;900&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="css/style.css">
 </head>
@@ -22,10 +22,10 @@
   <div class="auth-box">
     <div class="auth-logo">🥦</div>
     <div class="auth-title">نظام محل الخضار والفواكه</div>
-    <div class="auth-sub">إدارة متكاملة لمحلك التجاري</div>
+    <div class="auth-sub">إدارة متكاملة على السحابة</div>
     <div class="auth-tabs">
-      <button class="auth-tab active" onclick="switchAuthTab('login')">تسجيل الدخول</button>
-      <button class="auth-tab"        onclick="switchAuthTab('register')">حساب جديد</button>
+      <button class="auth-tab active" onclick="switchAuthTab('login',this)">تسجيل الدخول</button>
+      <button class="auth-tab"        onclick="switchAuthTab('register',this)">حساب جديد</button>
     </div>
     <div class="auth-err" id="auth-err"></div>
     <!-- نموذج الدخول -->
@@ -60,7 +60,7 @@
       <span class="hlogo">🥦</span>
       <div class="htitle">
         <h1 id="shop-name-header">نظام المحل</h1>
-        <p>إدارة متكاملة · محفوظ على السحابة</p>
+        <p>إدارة سحابية متكاملة · حفظ فوري</p>
       </div>
       <div class="hright">
         <div class="date-badge" onclick="changeDatePrompt()">📅 <span id="headerDate">-</span></div>
@@ -68,9 +68,10 @@
       </div>
     </div>
     <nav class="tabs">
+      <button onclick="showPage('dashboard',this)">📈 الإحصائيات</button>
       <button onclick="showPage('baqi',this)">🏪 الباقي</button>
       <button onclick="showPage('nazil',this)">📥 النازل</button>
-      <button class="active" onclick="showPage('sales',this)">🛒 المشتريات</button>
+      <button class="active" onclick="showPage('sales',this)">🛒 المبيعات</button>
       <button onclick="showPage('tarhil',this)">📤 الترحيلات</button>
       <button onclick="showPage('customers',this)">👤 العملاء</button>
       <button onclick="showPage('suppliers',this)">🚛 الموردون</button>
@@ -87,11 +88,16 @@
   <!-- شريط المزامنة -->
   <div class="sync-bar" id="sync-bar">
     <div class="sync-dot"></div>
-    <span id="sync-text">محفوظ على السحابة ✓</span>
+    <span id="sync-text">متصل بالسحابة ✓</span>
+  </div>
+
+  <!-- ===== صفحة الإحصائيات (Dashboard) ===== -->
+  <div class="page" id="page-dashboard">
+    <div id="dashboard-stats"></div>
   </div>
 
   <!-- ===== صفحة الباقي ===== -->
-  <div class="page active" id="page-baqi">
+  <div class="page" id="page-baqi">
     <div class="card">
       <div class="ch g"><span>🏪</span><h2>الباقي في المحل</h2></div>
       <div class="cb" id="baqi-body"><p style="text-align:center;color:#aaa;padding:24px">لا توجد متبقيات</p></div>
@@ -129,7 +135,7 @@
     </div>
   </div>
 
-  <!-- ===== صفحة المشتريات (المبيعات) ===== -->
+  <!-- ===== صفحة المبيعات (كانت المشتريات) ===== -->
   <div class="page" id="page-sales">
     <div class="card">
       <div class="ch g"><span>🛒</span><h2>مبيعات اليوم</h2><span class="cbadge g" id="sales-badge">-</span></div>
@@ -139,10 +145,10 @@
             <tr style="background:#f0f7f0;">
               <th>#</th><th>المورد</th><th>الصنف</th><th>الكمية</th>
               <th>المباع</th><th>المتبقي</th><th>الإجمالي</th><th>▼</th><th></th>
-            </tr>
+             </tr>
           </thead>
           <tbody id="sales-tbody"></tbody>
-        </table>
+         </table>
       </div>
       <div class="cb" style="border-top:2px solid var(--border);display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px;">
         <div style="display:flex;gap:7px;flex-wrap:wrap;">
@@ -465,13 +471,12 @@
 <!-- ===== تحميل Supabase ===== -->
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 
-<!-- ===== تحميل الوحدات بالترتيب الصحيح ===== -->
-<!-- 1. المساعدات والبيانات أولاً (لا تعتمد على أحد) -->
+<!-- ===== تحميل الوحدات بالترتيب الصحيح (كلها تعتمد على Supabase فقط) ===== -->
 <script src="js/utils.js"></script>
 <script src="js/data.js"></script>
 <script src="js/auth.js"></script>
+<script src="js/dashboard.js"></script>
 
-<!-- 2. وحدات العرض (تعتمد على utils و data) -->
 <script src="js/renderers/baqi.js"></script>
 <script src="js/renderers/nazil.js"></script>
 <script src="js/renderers/tarhil.js"></script>
@@ -484,10 +489,8 @@
 <script src="js/renderers/khazna.js"></script>
 <script src="js/renderers/subscription.js"></script>
 <script src="js/renderers/admin.js"></script>
-<!-- sales آخر renderers لأنه يعتمد على customers و suppliers -->
 <script src="js/renderers/sales.js"></script>
 
-<!-- 3. نقطة التشغيل الرئيسية أخيراً (تعتمد على الكل) -->
 <script src="js/app.js"></script>
 
 </body>
