@@ -1,69 +1,90 @@
-// ===================== renderers/partners.js — الشركاء =====================
+// ===================== renderers/partners.js =====================
 
-function addPartner() {
+async function addPartner() {
   const name = document.getElementById('pt-name').value.trim();
   if (!name) return alert('أدخل اسم الشريك');
-  S.partners.push({
-    id: Date.now(), name,
-    phone:  document.getElementById('pt-phone').value.trim(),
-    daily:  parseFloat(document.getElementById('pt-daily').value)  || 0,
-    profit: parseFloat(document.getElementById('pt-profit').value) || 0,
-    bank:   document.getElementById('pt-bank').value.trim(),
-    post:   document.getElementById('pt-post').value.trim(),
-    voda:   document.getElementById('pt-voda').value.trim(),
-    payments: [], absences: [], profits: []
-  });
-  ['pt-name','pt-phone','pt-daily','pt-profit','pt-bank','pt-post','pt-voda'].forEach(id => document.getElementById(id).value = '');
-  save(); renderPartners();
+  try {
+    await insertPartner({
+      name,
+      phone: document.getElementById('pt-phone').value.trim(),
+      daily: parseFloat(document.getElementById('pt-daily').value) || 0,
+      profit: parseFloat(document.getElementById('pt-profit').value) || 0,
+      bank: document.getElementById('pt-bank').value.trim(),
+      post: document.getElementById('pt-post').value.trim(),
+      voda: document.getElementById('pt-voda').value.trim(),
+      payments: [], absences: [], profits: [],
+      created_at: new Date().toISOString()
+    });
+    ['pt-name','pt-phone','pt-daily','pt-profit','pt-bank','pt-post','pt-voda'].forEach(id => document.getElementById(id).value = '');
+    await loadAllData();
+  } catch (e) { alert('فشل الإضافة: ' + e.message); }
 }
 
-function delPartner(id) {
+async function updatePartner(id) {
+  const p = S.partners.find(x => x.id == id);
+  if (!p) return;
+  const newName = prompt('الاسم الجديد', p.name);
+  if (!newName || newName === p.name) return;
+  try {
+    await updatePartnerRow(id, { name: newName });
+    await loadAllData();
+  } catch (e) { alert('فشل التحديث'); }
+}
+
+async function deletePartner(id) {
   if (!confirm('حذف هذا الشريك وكل سجلاته؟')) return;
-  S.partners = S.partners.filter(p => p.id != id);
-  save(); renderPartners();
+  try {
+    await deletePartnerRow(id);
+    await loadAllData();
+  } catch (e) { alert('فشل الحذف'); }
 }
 
 function renderPartners() {
-  const c = document.getElementById('part-list-cont');
-  if (!S.partners.length) { c.innerHTML = '<p style="text-align:center;color:#aaa;padding:24px">لا يوجد شركاء</p>'; return; }
-  c.innerHTML = S.partners.map(p => {
-    const presents = 30 - p.absences.length;
-    const earned   = presents * p.daily;
-    const paid     = p.payments.reduce((s, x) => s + x.amount, 0);
-    return `<div class="card" style="cursor:pointer" onclick="openPartDetail(${p.id})">
-      <div class="ch b" style="justify-content:space-between">
-        <div style="display:flex;align-items:center;gap:9px">
-          <span>🤝</span>
-          <div>
-            <div style="font-weight:800;color:var(--blue)">${p.name}</div>
-            <div style="font-size:0.74rem;color:var(--gray)">${p.phone || '-'} | ${p.daily} جنيه/يوم | أرباح ${p.profit}%</div>
+  const container = document.getElementById('part-list-cont');
+  if (!S.partners.length) {
+    container.innerHTML = '<p style="text-align:center;color:#aaa;padding:24px">لا يوجد شركاء</p>';
+    return;
+  }
+  container.innerHTML = S.partners.map(p => {
+    const presents = 30 - (p.absences || []).length;
+    const earned = presents * p.daily;
+    const paid = (p.payments || []).reduce((s, x) => s + x.amount, 0);
+    return `
+      <div class="card" style="cursor:pointer" onclick="openPartDetail(${p.id})">
+        <div class="ch b" style="justify-content:space-between">
+          <div style="display:flex;align-items:center;gap:9px">
+            <span>🤝</span>
+            <div>
+              <div style="font-weight:800;color:var(--blue)">${p.name}</div>
+              <div style="font-size:0.74rem;color:var(--gray)">${p.phone || '-'} | ${p.daily} جنيه/يوم | أرباح ${p.profit}%</div>
+            </div>
+          </div>
+          <div style="display:flex;align-items:center;gap:8px">
+            <div style="text-align:left">
+              <div style="font-size:0.74rem;color:var(--gray)">المستحق</div>
+              <div style="font-weight:900;color:var(--green)">${N(earned - paid)} جنيه</div>
+            </div>
+            <button class="btn btn-b btn-xs no-print" onclick="event.stopPropagation();updatePartner(${p.id})">✏️</button>
+            <button class="btn btn-r btn-xs no-print" onclick="event.stopPropagation();deletePartner(${p.id})">🗑️</button>
           </div>
         </div>
-        <div style="display:flex;align-items:center;gap:8px">
-          <div style="text-align:left">
-            <div style="font-size:0.74rem;color:var(--gray)">المستحق</div>
-            <div style="font-weight:900;color:var(--green)">${N(earned - paid)} جنيه</div>
-          </div>
-          <button class="btn btn-r btn-xs no-print" onclick="event.stopPropagation();delPartner(${p.id})">🗑️</button>
-        </div>
-      </div>
-    </div>`;
+      </div>`;
   }).join('');
 }
 
 function openPartDetail(id) {
   const p = S.partners.find(x => x.id == id);
   if (!p) return;
-  document.getElementById('part-list-view').style.display   = 'none';
+  document.getElementById('part-list-view').style.display = 'none';
   document.getElementById('part-detail-view').style.display = 'block';
   document.getElementById('pd-name').textContent = p.name;
   document.getElementById('pd-info').textContent = `${p.daily} جنيه/يوم | أرباح ${p.profit}%`;
 
-  const presents      = 30 - p.absences.length;
-  const masarif       = presents * p.daily;
-  const paid          = p.payments.reduce((s, x) => s + x.amount, 0);
-  const totalProfits  = p.profits.reduce((s, x) => s + x.amount, 0);
-  const net           = (masarif + totalProfits) - paid;
+  const presents = 30 - (p.absences || []).length;
+  const masarif = presents * p.daily;
+  const paid = (p.payments || []).reduce((s, x) => s + x.amount, 0);
+  const totalProfits = (p.profits || []).reduce((s, x) => s + x.amount, 0);
+  const net = (masarif + totalProfits) - paid;
 
   const bankInfo = [
     p.bank ? `<div style="background:#f8f8f8;border-radius:7px;padding:7px 11px;flex:1;min-width:120px"><div style="font-size:0.71rem;color:#888">بنكي</div><div style="font-weight:700;font-size:0.82rem">${p.bank}</div></div>` : '',
@@ -71,22 +92,22 @@ function openPartDetail(id) {
     p.voda ? `<div style="background:#f8f8f8;border-radius:7px;padding:7px 11px;flex:1;min-width:120px"><div style="font-size:0.71rem;color:#888">فودافون</div><div style="font-weight:700;font-size:0.82rem">${p.voda}</div></div>` : ''
   ].join('');
 
-  const absRows = p.absences.map((a, ai) =>
-    `<div style="display:flex;justify-content:space-between;align-items:center;padding:5px 0;border-bottom:1px solid #f0f0f0;font-size:0.82rem">
+  const absRows = (p.absences || []).map((a, ai) => `
+    <div style="display:flex;justify-content:space-between;align-items:center;padding:5px 0;border-bottom:1px solid #f0f0f0;font-size:0.82rem">
       <span>${a.date}</span>
       <span style="color:var(--red)">-${N(p.daily)} جنيه</span>
       <button class="btn btn-r btn-xs" onclick="delPartAbsence(${id},${ai})">🗑️</button>
     </div>`).join('') || '<p style="color:#aaa;text-align:center;padding:6px">لا توجد غيابات</p>';
 
-  const payRows = p.payments.map((x, xi) =>
-    `<div style="display:flex;justify-content:space-between;align-items:center;padding:5px 0;border-bottom:1px solid #f0f0f0;font-size:0.81rem">
+  const payRows = (p.payments || []).map((x, xi) => `
+    <div style="display:flex;justify-content:space-between;align-items:center;padding:5px 0;border-bottom:1px solid #f0f0f0;font-size:0.81rem">
       <span style="font-weight:700;color:var(--red)">-${N(x.amount)}</span>
       <span style="flex:1;margin:0 6px;color:#555;font-size:0.76rem">${x.note || 'دفعة'}</span>
       <button class="btn btn-r btn-xs" onclick="delPartPayment(${id},${xi})">🗑️</button>
     </div>`).join('') || '<p style="color:#aaa;text-align:center;padding:6px">لا توجد</p>';
 
-  const profitRows = p.profits.map((x, xi) =>
-    `<div style="display:flex;justify-content:space-between;align-items:center;padding:5px 0;border-bottom:1px solid #f0f0f0;font-size:0.81rem">
+  const profitRows = (p.profits || []).map((x, xi) => `
+    <div style="display:flex;justify-content:space-between;align-items:center;padding:5px 0;border-bottom:1px solid #f0f0f0;font-size:0.81rem">
       <span style="font-weight:700;color:var(--green)">+${N(x.amount)}</span>
       <span style="flex:1;margin:0 6px;color:#555;font-size:0.76rem">${x.note || 'أرباح'}</span>
       <button class="btn btn-r btn-xs" onclick="delPartProfit(${id},${xi})">🗑️</button>
@@ -139,34 +160,51 @@ function openPartDetail(id) {
     </div>`;
 }
 
-function addPartAbsence(id) {
-  const p    = S.partners.find(x => x.id == id);
+async function addPartAbsence(id) {
+  const p = S.partners.find(x => x.id == id);
   const date = document.getElementById(`pabs-${id}`).value.trim() || S.date;
-  p.absences.push({ date }); save(); openPartDetail(id);
+  const newAbsences = [...(p.absences || []), { date }];
+  await updatePartnerRow(id, { absences: newAbsences });
+  await loadAllData(); openPartDetail(id);
 }
-function delPartAbsence(id, idx) { S.partners.find(x => x.id == id).absences.splice(idx, 1); save(); openPartDetail(id); }
-
-function addPartPayment(id) {
-  const amt  = parseFloat(document.getElementById(`pp-amt-${id}`).value)  || 0;
+async function delPartAbsence(id, idx) {
+  const p = S.partners.find(x => x.id == id);
+  const newAbsences = (p.absences || []).filter((_, i) => i != idx);
+  await updatePartnerRow(id, { absences: newAbsences });
+  await loadAllData(); openPartDetail(id);
+}
+async function addPartPayment(id) {
+  const amt = parseFloat(document.getElementById(`pp-amt-${id}`).value) || 0;
   const note = document.getElementById(`pp-note-${id}`).value.trim();
   if (!amt) return alert('أدخل المبلغ');
   const p = S.partners.find(x => x.id == id);
-  p.payments.push({ amount: amt, note, date: S.date });
-  S.expenses.push({ id: Date.now(), date: S.date, desc: `شريك — ${p.name}: ${note || 'دفعة'}`, suppId: '', amount: amt });
-  save(); openPartDetail(id); renderDaySummary();
+  const newPayments = [...(p.payments || []), { amount: amt, note, date: S.date }];
+  await updatePartnerRow(id, { payments: newPayments });
+  await insertExpense({ date: S.date, desc: `شريك — ${p.name}: ${note || 'دفعة'}`, suppId: '', amount: amt });
+  await loadAllData(); openPartDetail(id);
 }
-function delPartPayment(id, idx) { S.partners.find(x => x.id == id).payments.splice(idx, 1); save(); openPartDetail(id); }
-
-function addPartProfit(id) {
-  const amt  = parseFloat(document.getElementById(`ppr-amt-${id}`).value)  || 0;
+async function delPartPayment(id, idx) {
+  const p = S.partners.find(x => x.id == id);
+  const newPayments = (p.payments || []).filter((_, i) => i != idx);
+  await updatePartnerRow(id, { payments: newPayments });
+  await loadAllData(); openPartDetail(id);
+}
+async function addPartProfit(id) {
+  const amt = parseFloat(document.getElementById(`ppr-amt-${id}`).value) || 0;
   const note = document.getElementById(`ppr-note-${id}`).value.trim();
   if (!amt) return alert('أدخل المبلغ');
-  S.partners.find(x => x.id == id).profits.push({ amount: amt, note, date: S.date });
-  save(); openPartDetail(id);
+  const p = S.partners.find(x => x.id == id);
+  const newProfits = [...(p.profits || []), { amount: amt, note, date: S.date }];
+  await updatePartnerRow(id, { profits: newProfits });
+  await loadAllData(); openPartDetail(id);
 }
-function delPartProfit(id, idx) { S.partners.find(x => x.id == id).profits.splice(idx, 1); save(); openPartDetail(id); }
-
+async function delPartProfit(id, idx) {
+  const p = S.partners.find(x => x.id == id);
+  const newProfits = (p.profits || []).filter((_, i) => i != idx);
+  await updatePartnerRow(id, { profits: newProfits });
+  await loadAllData(); openPartDetail(id);
+}
 function showPartList() {
-  document.getElementById('part-list-view').style.display   = 'block';
+  document.getElementById('part-list-view').style.display = 'block';
   document.getElementById('part-detail-view').style.display = 'none';
 }
