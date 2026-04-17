@@ -1,73 +1,105 @@
-// ===================== renderers/employees.js — الموظفون =====================
+// ===================== renderers/employees.js =====================
 
-function addEmployee() {
-  const name   = document.getElementById('emp-name').value.trim();
-  const role   = document.getElementById('emp-role').value;
+async function addEmployee() {
+  const name = document.getElementById('emp-name').value.trim();
+  const role = document.getElementById('emp-role').value;
   const salary = parseFloat(document.getElementById('emp-salary').value) || 0;
-  const phone  = document.getElementById('emp-phone').value.trim();
+  const phone = document.getElementById('emp-phone').value.trim();
   if (!name || !salary) return alert('أدخل الاسم والراتب');
-  S.employees.push({ id: Date.now(), name, role, salary, phone, payments: [], absences: [] });
-  ['emp-name', 'emp-salary', 'emp-phone'].forEach(id => document.getElementById(id).value = '');
-  save(); renderEmployees();
+  try {
+    await insertEmployee({
+      name, role, salary, phone,
+      payments: [], absences: [],
+      created_at: new Date().toISOString()
+    });
+    document.getElementById('emp-name').value = '';
+    document.getElementById('emp-salary').value = '';
+    document.getElementById('emp-phone').value = '';
+    await loadAllData();
+  } catch (e) {
+    alert('فشل الإضافة: ' + e.message);
+  }
 }
 
-function delEmployee(id) {
+async function updateEmployee(id) {
+  const emp = S.employees.find(e => e.id == id);
+  if (!emp) return;
+  const newName = prompt('الاسم الجديد', emp.name);
+  if (!newName || newName === emp.name) return;
+  try {
+    await updateEmployeeRow(id, { name: newName });
+    await loadAllData();
+  } catch (e) {
+    alert('فشل التحديث: ' + e.message);
+  }
+}
+
+async function deleteEmployee(id) {
   if (!confirm('حذف هذا الموظف وكل سجلاته؟')) return;
-  S.employees = S.employees.filter(e => e.id != id);
-  save(); renderEmployees();
+  try {
+    await deleteEmployeeRow(id);
+    await loadAllData();
+  } catch (e) {
+    alert('فشل الحذف: ' + e.message);
+  }
 }
 
 function renderEmployees() {
-  const c = document.getElementById('emp-list-cont');
-  if (!S.employees.length) { c.innerHTML = '<p style="text-align:center;color:#aaa;padding:24px">لا يوجد موظفون</p>'; return; }
-  c.innerHTML = S.employees.map(e => {
-    const dr  = e.salary / 30;
-    const ded = e.absences.length * dr;
-    const paid = e.payments.reduce((s, p) => s + p.amount, 0);
-    const rem  = e.salary - ded - paid;
-    return `<div class="card" style="cursor:pointer" onclick="openEmpDetail(${e.id})">
-      <div class="ch g" style="justify-content:space-between">
-        <div style="display:flex;align-items:center;gap:9px">
-          <span>👷</span>
-          <div>
-            <div style="font-weight:800;color:var(--green)">${e.name}</div>
-            <div style="font-size:0.74rem;color:var(--gray)">${e.role} | راتب: ${N(e.salary)} جنيه</div>
+  const container = document.getElementById('emp-list-cont');
+  if (!S.employees.length) {
+    container.innerHTML = '<p style="text-align:center;color:#aaa;padding:24px">لا يوجد موظفون</p>';
+    return;
+  }
+  container.innerHTML = S.employees.map(e => {
+    const dr = e.salary / 30;
+    const ded = (e.absences || []).length * dr;
+    const paid = (e.payments || []).reduce((s, p) => s + p.amount, 0);
+    const rem = e.salary - ded - paid;
+    return `
+      <div class="card" style="cursor:pointer" onclick="openEmpDetail(${e.id})">
+        <div class="ch g" style="justify-content:space-between">
+          <div style="display:flex;align-items:center;gap:9px">
+            <span>👷</span>
+            <div>
+              <div style="font-weight:800;color:var(--green)">${e.name}</div>
+              <div style="font-size:0.74rem;color:var(--gray)">${e.role} | راتب: ${N(e.salary)} جنيه</div>
+            </div>
+          </div>
+          <div style="display:flex;align-items:center;gap:8px">
+            <div style="text-align:left">
+              <div style="font-size:0.74rem;color:var(--gray)">المتبقي</div>
+              <div style="font-weight:900;color:${rem > 0 ? 'var(--red)' : 'var(--green)'}">${N(rem)} جنيه</div>
+            </div>
+            <button class="btn btn-b btn-xs no-print" onclick="event.stopPropagation();updateEmployee(${e.id})">✏️</button>
+            <button class="btn btn-r btn-xs no-print" onclick="event.stopPropagation();deleteEmployee(${e.id})">🗑️</button>
           </div>
         </div>
-        <div style="display:flex;align-items:center;gap:8px">
-          <div style="text-align:left">
-            <div style="font-size:0.74rem;color:var(--gray)">المتبقي</div>
-            <div style="font-weight:900;color:${rem > 0 ? 'var(--red)' : 'var(--green)'}">${N(rem)} جنيه</div>
-          </div>
-          <button class="btn btn-r btn-xs no-print" onclick="event.stopPropagation();delEmployee(${e.id})">🗑️</button>
-        </div>
-      </div>
-    </div>`;
+      </div>`;
   }).join('');
 }
 
 function openEmpDetail(id) {
   const e = S.employees.find(x => x.id == id);
   if (!e) return;
-  document.getElementById('emp-list-view').style.display   = 'none';
+  document.getElementById('emp-list-view').style.display = 'none';
   document.getElementById('emp-detail-view').style.display = 'block';
-  document.getElementById('ed-name').textContent   = e.name;
-  document.getElementById('ed-role').textContent   = e.role;
+  document.getElementById('ed-name').textContent = e.name;
+  document.getElementById('ed-role').textContent = e.role;
   document.getElementById('ed-salary').textContent = 'راتب: ' + N(e.salary) + ' جنيه';
-  const dr   = Math.round(e.salary / 30);
-  const ded  = e.absences.length * dr;
-  const paid = e.payments.reduce((s, p) => s + p.amount, 0);
-  const net  = e.salary - ded - paid;
+  const dr = Math.round(e.salary / 30);
+  const ded = (e.absences || []).length * dr;
+  const paid = (e.payments || []).reduce((s, p) => s + p.amount, 0);
+  const net = e.salary - ded - paid;
 
-  const absRows = e.absences.map((a, ai) =>
-    `<tr>
+  const absRows = (e.absences || []).map((a, ai) => `
+    <tr>
       <td style="padding:5px">${a.date}</td>
       <td style="padding:5px;color:var(--red)">${N(dr)} جنيه</td>
       <td style="padding:5px"><button class="btn btn-r btn-xs" onclick="delAbsence(${id},${ai})">🗑️</button></td>
     </tr>`).join('') || '<tr><td colspan="3" style="color:#aaa;padding:10px;text-align:center">لا توجد غيابات</td></tr>';
 
-  const payRows = e.payments.map((p, pi) =>
-    `<div style="display:flex;align-items:center;gap:7px;padding:7px 0;border-bottom:1px solid #f0f0f0;font-size:0.84rem">
+  const payRows = (e.payments || []).map((p, pi) => `
+    <div style="display:flex;align-items:center;gap:7px;padding:7px 0;border-bottom:1px solid #f0f0f0;font-size:0.84rem">
       <span style="font-weight:900;color:var(--red);min-width:85px">-${N(p.amount)} جنيه</span>
       <span style="flex:1;color:#444;font-size:0.79rem">${p.note || 'دفعة'} — ${p.date}</span>
       <button class="btn btn-r btn-xs" onclick="delEmpPayment(${id},${pi})">🗑️</button>
@@ -112,28 +144,55 @@ function openEmpDetail(id) {
     </div>`;
 }
 
-function addAbsence(id) {
+async function addAbsence(id) {
   const e = S.employees.find(x => x.id == id);
   const date = document.getElementById(`abs-date-${id}`).value.trim() || S.date;
-  e.absences.push({ date });
-  save(); openEmpDetail(id);
+  const newAbsences = [...(e.absences || []), { date }];
+  try {
+    await updateEmployeeRow(id, { absences: newAbsences });
+    await loadAllData();
+    openEmpDetail(id);
+  } catch (err) { alert('فشل تسجيل الغياب'); }
 }
 
-function delAbsence(id, idx) { S.employees.find(x => x.id == id).absences.splice(idx, 1); save(); openEmpDetail(id); }
+async function delAbsence(id, idx) {
+  const e = S.employees.find(x => x.id == id);
+  const newAbsences = (e.absences || []).filter((_, i) => i != idx);
+  try {
+    await updateEmployeeRow(id, { absences: newAbsences });
+    await loadAllData();
+    openEmpDetail(id);
+  } catch (err) { alert('فشل حذف الغياب'); }
+}
 
-function addEmpPayment(id) {
-  const amt  = parseFloat(document.getElementById(`ep-amt-${id}`).value)  || 0;
+async function addEmpPayment(id) {
+  const amt = parseFloat(document.getElementById(`ep-amt-${id}`).value) || 0;
   const note = document.getElementById(`ep-note-${id}`).value.trim();
   if (!amt) return alert('أدخل المبلغ');
   const e = S.employees.find(x => x.id == id);
-  e.payments.push({ amount: amt, note, date: S.date });
-  S.expenses.push({ id: Date.now(), date: S.date, desc: `راتب — ${e.name}: ${note || 'دفعة'}`, suppId: '', amount: amt });
-  save(); openEmpDetail(id); renderDaySummary();
+  const newPayments = [...(e.payments || []), { amount: amt, note, date: S.date }];
+  try {
+    await updateEmployeeRow(id, { payments: newPayments });
+    // إضافة المصروف تلقائياً
+    await insertExpense({ date: S.date, desc: `راتب — ${e.name}: ${note || 'دفعة'}`, suppId: '', amount: amt });
+    await loadAllData();
+    openEmpDetail(id);
+  } catch (err) { alert('فشل إضافة الدفعة'); }
 }
 
-function delEmpPayment(id, idx) { S.employees.find(x => x.id == id).payments.splice(idx, 1); save(); openEmpDetail(id); }
+async function delEmpPayment(id, idx) {
+  const e = S.employees.find(x => x.id == id);
+  const payment = (e.payments || [])[idx];
+  const newPayments = (e.payments || []).filter((_, i) => i != idx);
+  try {
+    await updateEmployeeRow(id, { payments: newPayments });
+    // حذف المصروف المرتبط (اختياري حسب الحاجة)
+    await loadAllData();
+    openEmpDetail(id);
+  } catch (err) { alert('فشل حذف الدفعة'); }
+}
 
 function showEmpList() {
-  document.getElementById('emp-list-view').style.display   = 'block';
+  document.getElementById('emp-list-view').style.display = 'block';
   document.getElementById('emp-detail-view').style.display = 'none';
 }
